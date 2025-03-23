@@ -1,5 +1,7 @@
 ﻿using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using System.Collections;
+using System.Text;
 
 namespace CSharpRepl
 {
@@ -40,7 +42,7 @@ namespace CSharpRepl
                     state = await Execute(input, state, scriptOptions);
                     if (state?.ReturnValue != null)
                     {
-                        Console.WriteLine($"=> {state.ReturnValue}");
+                        Console.WriteLine($"=> {FormatResult(state.ReturnValue)}");
                     }
                 }
                 catch (Exception ex)
@@ -57,6 +59,48 @@ namespace CSharpRepl
             return previousState == null
                 ? await CSharpScript.RunAsync(code, options)
                 : await previousState.ContinueWithAsync(code, options);
+        }
+        static string FormatResult(object result)
+        {
+            if (result == null) return "null";
+
+            var sb = new StringBuilder();
+
+            // Для строк возвращаем как есть
+            if (result is string str) return $"\"{str}\"";
+
+            // Для IEnumerable (кроме строк) форматируем как коллекцию
+            if (result is IEnumerable enumerable && !(result is string))
+            {
+                sb.Append("{ ");
+                foreach (var item in enumerable)
+                {
+                    sb.Append(FormatSingleItem(item));
+                    sb.Append(", ");
+                }
+                if (sb.Length > 2) sb.Remove(sb.Length - 2, 2);
+                sb.Append(" }");
+                return sb.ToString();
+            }
+
+            return FormatSingleItem(result);
+        }
+
+        static string FormatSingleItem(object item)
+        {
+            if (item == null) return "null";
+
+            // Специальная обработка для byte[]
+            if (item is byte[] byteArray)
+                return $"byte[{byteArray.Length}] {{ {BitConverter.ToString(byteArray).Replace("-", ", ")} }}";
+
+            // Для строк оборачиваем в кавычки
+            if (item is string s) return $"\"{s}\"";
+
+            // Для символов добавляем одинарные кавычки
+            if (item is char c) return $"'{c}'";
+
+            return item.ToString();
         }
     }
 }
